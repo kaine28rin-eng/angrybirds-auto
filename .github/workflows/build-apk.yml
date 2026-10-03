@@ -2,7 +2,7 @@ name: Build Debug APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
@@ -19,19 +19,14 @@ jobs:
           distribution: corretto
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v2
 
-      - name: Install NDK and Build Tools
-        uses: android-actions/android-install-ndk@v3
-        with:
-          ndk-version: 26.1.10909125
-
-      - name: Install additional SDK packages
+      - name: Install SDK packages
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.1"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0"
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35"
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew

@@ -1,12 +1,11 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.0"
 }
 
 android {
     namespace = "com.stevestudy.angrybirdsauto"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.stevestudy.angrybirdsauto"
@@ -16,11 +15,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // OpenCV manager
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
     }
 
     buildTypes {
@@ -53,7 +47,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.2")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
-    implementation("androidx.preference:preference-ktx:1.2.1")
+    implementation("androidx.preference:preference-ktx:1.2.0")
 
     // OpenCV Android SDK (from JitPack)
     implementation("com.github.steve1316:opencv-android-sdk:4.12.0")
