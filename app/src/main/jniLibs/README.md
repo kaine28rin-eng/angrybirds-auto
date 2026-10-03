@@ -1,0 +1,1 @@
+# This directory exists to ensure arm64-v8a native libs (e.g. libopencv_java4.so) are packaged from the OpenCV AAR. The ndk { abiFilters('arm64-v8a') } in build.gradle.kts ensures only 64-bit libs are retained.

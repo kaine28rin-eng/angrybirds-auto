@@ -3,6 +3,7 @@ package com.stevestudy.angrybirdsauto.ui
 import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -16,16 +17,23 @@ import com.stevestudy.angrybirdsauto.automation.AutoAccessibilityService
 import com.stevestudy.angrybirdsauto.automation.BotService
 import com.stevestudy.angrybirdsauto.automation.MediaProjectionService
 import com.stevestudy.angrybirdsauto.data.SharedData
-import org.opencv.android.OpenCVLoader
+import com.stevestudy.angrybirdsauto.utils.OpenCVManager
+import com.stevestudy.angrybirdsauto.utils.ShizukuOverlayManager
 
 /**
  * Main Activity — handles permission flow and starts the automation services.
  *
  * Flow:
- * 1. Load OpenCV
+ * 1. Load OpenCV statically (OpenCVLoader.initDebug() via OpenCVManager)
  * 2. Grant Permissions → overlay + screen capture + accessibility
+ *    - On Red Magic OS, SYSTEM_ALERT_WINDOW is bypassed via Shizuku appops
  * 3. Start Bot Service → creates floating overlay button
  * 4. Open Angry Birds → tap the floating play button to auto-play
+ *
+ * Key fixes for REDMAGIC 11 Pro (Android 15+):
+ *   - OpenCVLoader.initDebug() replaces initAsync (no external OpenCV Manager)
+ *   - ndk { abiFilters("arm64-v8a") } in build.gradle ensures only 64-bit .so
+ *   - ShizukuOverlayManager uses Shizuku API to run `appops set` bypass
  */
 class MainActivity : AppCompatActivity() {
 
@@ -37,7 +45,13 @@ class MainActivity : AppCompatActivity() {
 
         @JvmStatic
         private var mediaProjectionResultCode: Int = 0
+
+        // Track OpenCV initialization state
+        @JvmStatic
+        private var isOpenCVInitialized: Boolean = false
     }
+
+    private lateinit var shizukuOverlayManager: ShizukuOverlayManager
 
     private val screenCaptureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -84,9 +98,12 @@ class MainActivity : AppCompatActivity() {
 
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) {
+    ) { result ->
         if (Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Overlay permission granted!", Toast.LENGTH_SHORT).show()
+        } else if (shizukuOverlayManager.isRedMagicOS()) {
+            // Standard settings intent was blocked — try Shizuku bypass
+            shizukuOverlayManager.requestOverlayPermission()
         }
     }
 
@@ -102,10 +119,26 @@ class MainActivity : AppCompatActivity() {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         setContentView(if (isLandscape) R.layout.activity_main_land else R.layout.activity_main_port)
 
-        // Load OpenCV
-        if (!OpenCVLoader.initDebug()) {
-            Toast.makeText(this, "OpenCV failed to load!", Toast.LENGTH_LONG).show()
+        // --- OpenCV static initialization ---
+        // Uses OpenCVLoader.initDebug() internally — no external OpenCV Manager needed.
+        // On REDMAGIC 11 Pro (arm64-v8a, Android 15+), the native lib libopencv_java4.so
+        // is bundled in src/main/jniLibs/arm64-v8a/ and loaded directly.
+        // If static init fails, the toast will show the error.
+        OpenCVManager.init(this) { success ->
+            isOpenCVInitialized = success
+            if (success) {
+                Log_d("OpenCV initialized successfully")
+            } else {
+                Toast.makeText(
+                    this,
+                    "OpenCV init failed! Bot functionality will be limited.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
+
+        // Initialize Shizuku overlay manager (for Red Magic OS bypass)
+        shizukuOverlayManager = ShizukuOverlayManager(this)
 
         // Initialize SharedData with device metrics
         val metrics = resources.displayMetrics
@@ -128,6 +161,12 @@ class MainActivity : AppCompatActivity() {
         refreshStatus()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        // Delegate to Shizuku overlay manager for its permission result handling
+        shizukuOverlayManager.onActivityResult(requestCode, resultCode, data)
+    }
+
     private fun setupButtons() {
         findViewById<Button>(R.id.btn_setup).setOnClickListener { startPermissionFlow() }
         findViewById<Button>(R.id.btn_start_bot).setOnClickListener { startBotServices() }
@@ -145,7 +184,11 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val mediaOk = prefs.getBoolean("media_projection_permission", false) && mediaProjectionIntent != null
 
-        return "Overlay: ${if (overlayOk) "✓" else "✗"}\n" +
+        val shizukuStatus = if (shizukuOverlayManager.isShizukuAvailable()) "✓" else "N/A"
+
+        return "OpenCV: ${if (isOpenCVInitialized) "✓" else "✗"}\n" +
+            "Overlay: ${if (overlayOk) "✓" else "✗"}\n" +
+            "Shizuku: $shizukuStatus\n" +
             "Accessibility: ${if (accessOk) "✓" else "✗"}\n" +
             "Screen Capture: ${if (mediaOk) "✓" else "✗"}"
     }
@@ -153,11 +196,16 @@ class MainActivity : AppCompatActivity() {
     private fun startPermissionFlow() {
         // 1. Overlay permission
         if (!Settings.canDrawOverlays(this)) {
-            overlayPermissionLauncher.launch(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                    data = android.net.Uri.parse("package:$packageName")
-                }
-            )
+            // On Red Magic OS, try Shizuku bypass first
+            if (shizukuOverlayManager.isRedMagicOS()) {
+                shizukuOverlayManager.requestOverlayPermission()
+            } else {
+                overlayPermissionLauncher.launch(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                )
+            }
         }
 
         // 2. Accessibility service
@@ -187,8 +235,12 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val hasMediaPermission = prefs.getBoolean("media_projection_permission", false) && mediaProjectionIntent != null
 
-        if (!hasMediaPermission) {
-            Toast.makeText(this, "Grant screen capture permission first!", Toast.LENGTH_SHORT).show()
+        if (!hasMediaPermission || !isOpenCVInitialized) {
+            if (!isOpenCVInitialized) {
+                Toast.makeText(this, "OpenCV is not initialized!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Grant screen capture permission first!", Toast.LENGTH_SHORT).show()
+            }
             startPermissionFlow()
             return
         }
@@ -226,5 +278,9 @@ class MainActivity : AppCompatActivity() {
     private fun checkAccessibilityAndRefresh() {
         Toast.makeText(this, "Accessibility service status updated.", Toast.LENGTH_SHORT).show()
         refreshStatus()
+    }
+
+    private fun Log_d(msg: String) {
+        android.util.Log.d("${SharedData.loggerTag}MainActivity", msg)
     }
 }
