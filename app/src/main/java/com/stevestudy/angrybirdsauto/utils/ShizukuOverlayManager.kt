@@ -21,31 +21,32 @@ import rikka.shizuku.Shizuku
  *
  * to natively bypass the system daemon restriction.
  *
- * Shizuku API reference (v13.1.5):
+ * Shizuku API (v13.1.5):
  *   Shizuku.checkSelfPermission()  → int  (0 = granted, non-zero = denied)
- *   Shizuku.requestPermission(int) → void (requests permission, result via listener)
+ *   Shizuku.requestPermission(int) → void (result delivered via listener)
  *   Shizuku.addRequestPermissionResultListener(listener) → void
- *   Shizuku.getBinder()            → IBinder (use for remote service calls)
- *   Shizuku.isPreV11()             → boolean
+ *   Shizuku.getBinder()            → IBinder (Shizuku service binder)
+ *
+ * The appops bypass works by spawning a root process via Shizuku that
+ * executes the `appops` command, which directly modifies the AppOpsManager
+ * mode for OP_SYSTEM_ALERT_WINDOW, bypassing the Settings UI restriction.
  */
 class ShizukuOverlayManager(private val activity: Activity) {
 
     private val tag: String = "${com.stevestudy.angrybirdsauto.data.SharedData.loggerTag}ShizukuOverlayManager"
 
     companion object {
-        const val OP_SYSTEM_ALERT_WINDOW = 47
-        const val SHIZUKU_PERMISSION_REQUEST = 1001
+        private const val SHIZUKU_PERMISSION_REQUEST = 1001
         const val OVERLAY_SETTINGS_REQUEST = 1000
 
-        // Shizuku permission codes
         private const val PERMISSION_GRANTED = 0
     }
 
     /** Lazily-initialized listener for Shizuku permission results. */
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        if (requestCode == SHIZUKU_PERMISSION_REQUEST && grantResult == 0) {
-            // 0 = PERMISSION_GRANTED
+        if (requestCode == SHIZUKU_PERMISSION_REQUEST && grantResult == PERMISSION_GRANTED) {
             Log.i(tag, "Shizuku permission granted via callback.")
+            // Retry the appops bypass now that Shizuku permission is granted
             if (bypassOverlayWithShizuku() && hasOverlayPermission()) {
                 Toast.makeText(activity, "Overlay permission granted via Shizuku!", Toast.LENGTH_LONG).show()
             } else {
@@ -91,6 +92,13 @@ class ShizukuOverlayManager(private val activity: Activity) {
             Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST)
         } catch (e: Exception) {
             Log.e(tag, "Failed to request Shizuku permission: ${e.message}")
+            // Fallback: open Shizuku settings via intent
+            try {
+                val intent = Intent("moe.shizuku.intent.action.REQUEST_PERMISSION")
+                activity.startActivityForResult(intent, SHIZUKU_PERMISSION_REQUEST)
+            } catch (e2: Exception) {
+                Log.e(tag, "Could not open Shizuku settings: ${e2.message}")
+            }
         }
     }
 
@@ -98,11 +106,10 @@ class ShizukuOverlayManager(private val activity: Activity) {
      * Use Shizuku to execute `appops set <pkg> SYSTEM_ALERT_WINDOW allow`,
      * which defeats the Red Magic OS restriction on the overlay toggle.
      *
-     * This calls the hidden AppOpsManager.setMode() method via Shizuku's
-     * remote proxy. We obtain the appops service binder through Shizuku
-     * and invoke the method via reflection on the remote stub.
+     * This spawns a root process via Shizuku that runs the appops command,
+     * directly modifying the AppOpsManager mode for the app.
      *
-     * @return true if the command was dispatched successfully.
+     * @return true if the command was dispatched and exited successfully.
      */
     fun bypassOverlayWithShizuku(): Boolean {
         if (!isShizukuAvailable()) {
@@ -110,95 +117,84 @@ class ShizukuOverlayManager(private val activity: Activity) {
             return false
         }
 
+        val packageName = activity.packageName
+        val command = "appops set $packageName SYSTEM_ALERT_WINDOW allow"
+
         return try {
-            // Get the appops service IBinder via Shizuku's binder
-            // Shizuku.getBinder() returns the Shizuku service binder
-            // We use the hidden API: getSystemService("appops") via Shizuku
-            val shizukuService = try {
-                val method = Shizuku::class.java.getMethod("requireService")
-                method.invoke(null)
-            } catch (e: Exception) {
-                // Fallback: use reflection to call hidden methods
-                null
-            }
+            // Shizuku.newProcess() spawns a process as root with Shizuku's
+            // permissions. This is the recommended way to run shell commands
+            // via Shizuku (the process runs with root privileges).
+            //
+            // We use reflection because newProcess is not part of the public API
+            // in Shizuku 13.1.5, but it's stable across versions.
+            val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
+            val newProcessMethod = shizukuClass.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
+            )
+            newProcessMethod.isAccessible = true
 
-            // Direct approach: use Shizuku to run a shell command that calls appops
-            // This is the most reliable method across Shizuku versions
-            val packageName = activity.packageName
-            val command = "appops set $packageName SYSTEM_ALERT_WINDOW allow"
-
-            // Use Shizuku's remote process to execute the appops command
-            val process = try {
-                // Shizuku.newProcess is internal; use reflection to access it
-                val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
-                val newProcessMethod = shizukuClass.getDeclaredMethod(
-                    "newProcess",
-                    Array<String>::class.java,
-                    Array<String>::class.java,
-                    String::class.java
-                )
-                newProcessMethod.isAccessible = true
-
-                val cmdArray = arrayOf("appops")
-                val argsArray = arrayOf("set", packageName, "SYSTEM_ALERT_WINDOW", "allow")
-                newProcessMethod.invoke(null, cmdArray, argsArray, packageName)
-            } catch (e: Exception) {
-                Log.e(tag, "Direct process spawn failed, trying reflection: ${e.message}")
-                null
-            }
+            val process = newProcessMethod.invoke(
+                null,
+                arrayOf("sh"),          // cmd: shell
+                arrayOf("-c", command), // args: -c "appops set ... allow"
+                "appops-bypass"         // processName
+            )
 
             if (process != null) {
                 // Wait for the command to complete
-                try {
-                    val waitForMethod = process.javaClass.getMethod("waitFor")
-                    val exitCode = waitForMethod.invoke(process)
-                    Log.i(tag, "appops command exit code: $exitCode")
-                    true
-                } catch (e: Exception) {
-                    Log.w(tag, "Could not wait for process: ${e.message}")
-                    true // Command was dispatched
-                }
+                val waitForMethod = process.javaClass.getMethod("waitFor")
+                val exitCode = waitForMethod.invoke(process) as Int
+                Log.i(tag, "appops command exit code: $exitCode")
+                exitCode == 0
             } else {
-                // Last resort: use IBinder reflection on AppOpsManager
-                executeAppopsViaIBinder(packageName)
+                Log.e(tag, "Shizuku.newProcess returned null.")
+                false
             }
         } catch (e: Exception) {
             Log.e(tag, "Shizuku appops bypass failed: ${e.message}", e)
-            false
+            // Fallback: try direct AppOpsManager.setMode() via reflection
+            // This requires the app to have the shizuku server access to
+            // the hidden API, which may work if Shizuku has set up the
+            // proper permissions.
+            executeAppopsViaReflection(packageName)
         }
     }
 
     /**
-     * Fallback: execute appops command by reflecting on the AppOpsManager
-     * remote stub obtained through Shizuku's binder.
+     * Fallback: execute appops by reflecting on AppOpsManager.setMode() directly.
+     *
+     * This approach calls the hidden AppOpsManager.setMode(int op, int uid,
+     * String pkg, int mode) method via reflection. It works when the calling
+     * app has been granted the SHIZUKU permission which allows access to
+     * otherwise-hidden system APIs.
+     *
+     * @param packageName The app package name to set SYSTEM_ALERT_WINDOW for.
+     * @return true if the reflection call succeeded.
      */
-    private fun executeAppopsViaIBinder(packageName: String): Boolean {
+    private fun executeAppopsViaReflection(packageName: String): Boolean {
         return try {
-            // Obtain the appops service binder via Shizuku
-            // Shizuku provides access to system services through its binder
-            val binder = Shizuku.getBinder()
-            if (binder == null) {
-                Log.e(tag, "Could not get Shizuku binder.")
-                return false
-            }
-
-            // Reflect on AppOpsManager to call setMode
+            // AppOpsManager.setMode is a hidden API (signature|system)
+            // Shizuku grants access to hidden APIs via its server process
             val appOpsClass = Class.forName("android.app.AppOpsManager")
             val setModeMethod = appOpsClass.getMethod(
                 "setMode",
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                String::class.java,
-                Int::class.javaPrimitiveType
+                Int::class.javaPrimitiveType,    // op: OP_SYSTEM_ALERT_WINDOW = 47
+                Int::class.javaPrimitiveType,    // uid: 0 (applies to package)
+                String::class.java,              // pkg: package name
+                Int::class.javaPrimitiveType     // mode: 0 = ALLOW, 1 = IGNORE, 2 = ERROR
             )
 
-            // Get the AppOpsManager instance from the binder
-            // AppOpsManager is obtained via Context.getSystemService
+            // AppOpsManager is a system service accessible via Context.getSystemService("appops")
+            // Shizuku allows access to this hidden service when permission is granted
             val appOps = activity.getSystemService("appops")
             if (appOps != null) {
-                // setMode(opCode=47[OP_SYSTEM_ALERT_WINDOW], uid=0, packageName, mode=0[ALLOW])
-                setModeMethod.invoke(appOps, OP_SYSTEM_ALERT_WINDOW, 0, packageName, 0)
-                Log.i(tag, "Successfully set SYSTEM_ALERT_WINDOW=allow via appops reflection")
+                // OP_SYSTEM_ALERT_WINDOW = 47
+                // mode 0 = MODE_ALLOWED
+                setModeMethod.invoke(appOps, 47, 0, packageName, 0)
+                Log.i(tag, "Successfully set SYSTEM_ALERT_WINDOW=allow via AppOpsManager reflection")
                 true
             } else {
                 Log.e(tag, "Could not get AppOpsManager instance.")
@@ -234,15 +230,13 @@ class ShizukuOverlayManager(private val activity: Activity) {
                     ).show()
                     return
                 }
-                // Bypass ran but didn't take effect — appops might need the permission
-                // to be set differently. Fall through to settings intent.
                 Log.w(tag, "Shizuku bypass ran but overlay permission still denied.")
             } else {
-                // Shizuku available but bypass failed — maybe permission not granted yet
+                // Shizuku available but bypass failed — maybe permission not granted
                 requestShizukuPermission()
                 Toast.makeText(
                     activity,
-                    "Shizuku permission requested. After approval, tap 'Grant Permissions' again.",
+                    "Shizuku permission requested. After approval, tap again.",
                     Toast.LENGTH_LONG
                 ).show()
                 return
@@ -272,8 +266,10 @@ class ShizukuOverlayManager(private val activity: Activity) {
     }
 
     /**
-     * Called from Activity.onActivityResult for overlay settings result.
-     * The Shizuku permission result is delivered via the registered listener.
+     * Called from Activity.onActivityResult for overlay settings / Shizuku result handling.
+     * The Shizuku permission result is delivered via the registered listener
+     * (OnRequestPermissionResultListener), so we only need to handle the
+     * standard overlay settings intent result here.
      */
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == OVERLAY_SETTINGS_REQUEST) {
@@ -281,6 +277,12 @@ class ShizukuOverlayManager(private val activity: Activity) {
                 Toast.makeText(activity, "Overlay permission granted!", Toast.LENGTH_SHORT).show()
             } else if (isShizukuAvailable()) {
                 // Settings intent didn't work — try Shizuku bypass as last resort
+                shizukuOverlayRetry()
+            }
+        } else if (requestCode == SHIZUKU_PERMISSION_REQUEST) {
+            // The listener handles the actual result, but we also check here
+            // in case the listener was triggered but bypass hadn't run yet
+            if (isShizukuAvailable()) {
                 shizukuOverlayRetry()
             }
         }
