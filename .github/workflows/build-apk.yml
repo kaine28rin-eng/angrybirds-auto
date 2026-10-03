@@ -9,6 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,23 +25,19 @@ jobs:
       - name: Install Android SDK
         run: |
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076260_latest.zip -O /tmp/cmdline-tools.zip
-          mkdir -p $ANDROID_HOME/cmdline-tools
-          unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
-          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-        env:
-          ANDROID_HOME: $HOME/Android/Sdk
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;35.0.0"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
-        env:
-          ANDROID_HOME: $HOME/Android/Sdk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
