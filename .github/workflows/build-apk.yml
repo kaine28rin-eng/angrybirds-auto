@@ -39,24 +39,30 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish APK to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.0-debug
-          name: Angry Birds Auto - Debug APK
-          body: |
-            ## Angry Birds Auto — Debug APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the existing release ID for v1.0.0-debug
+          RELEASE_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/kaine28rin-eng/angrybirds-auto/releases/tags/v1.0.0-debug" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
-            ### Fixes in this build (REDMAGIC 11 Pro, Android 15+):
-            1. **OpenCV 64-bit (arm64-v8a) strict** — `ndk { abiFilters("arm64-v8a") }`
-               ensures only `libopencv_java4.so` for arm64-v8a is packaged.
-               32-bit fallbacks removed (REDMAGIC 11 Pro dropped armeabi-v7a support).
-            2. **OpenCV static init** — `OpenCVLoader.initDebug()` replaces
-               `initAsync()` (no external OpenCV Manager app dependency).
-            3. **Screen capture (Android 14+)** — `foregroundServiceType="mediaProjection"`
-               on MediaProjectionService and BotService, plus
-               `FOREGROUND_SERVICE_MEDIA_PROJECTION` permission.
-            4. **Shizuku appops bypass** — `dev.rikka.shizuku:api:13.1.5` integrated.
-               If SYSTEM_ALERT_WINDOW is denied, the app uses Shizuku to run
-               `appops set com.stevestudy.angrybirdsauto SYSTEM_ALERT_WINDOW allow`
-               to defeat the Red Magic OS toggle restriction.
-          files: app/build/outputs/apk/debug/app-debug.apk
+          # Delete old asset if it exists (GitHub doesn't allow duplicate asset names)
+          curl -s -X GET -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/kaine28rin-eng/angrybirds-auto/releases/$RELEASE_ID/assets" \
+            | python3 -c "
+          import sys, json
+          assets = json.load(sys.stdin)
+          for asset in assets:
+              if asset['name'] == 'app-debug.apk':
+                  print(asset['id'])
+          " | while read ASSET_ID; do
+              curl -s -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/kaine28rin-eng/angrybirds-auto/releases/assets/$ASSET_ID"
+          done
+
+          # Upload the new APK asset
+          curl -s -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @app/build/outputs/apk/debug/app-debug.apk \
+            "https://uploads.github.com/repos/kaine28rin-eng/angrybirds-auto/releases/$RELEASE_ID/assets?name=app-debug.apk"
