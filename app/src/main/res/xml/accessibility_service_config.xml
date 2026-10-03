@@ -5,5 +5,4 @@
     android:accessibilityFeedbackType="feedbackSpoken"
     android:notificationTimeout="0"
     android:canRetrieveWindowContent="false"
-    android:canRequestEnhancedAccessibilityServices="true"
-    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagDefaultTouchEventEnabled" />
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews" />
