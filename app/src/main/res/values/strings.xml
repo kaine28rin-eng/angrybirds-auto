@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Angry Birds Auto</string>
+    <string name="accessibility_service_name">Angry Birds Auto Accessibility Service</string>
+    <string name="accessibility_service_description">Provides touch gesture automation for the game. Enable this service to allow the bot to tap and swipe on your screen.</string>
+    <string name="screen_capture_permission">Screen capture permission required</string>
+    <string name="overlay_permission">Display over other apps permission required</string>
+    <string name="accessibility_permission">Accessibility service not enabled</string>
+    <string name="btn_setup">Grant Permissions</string>
+    <string name="btn_start_bot">Start Bot Service</string>
+    <string name="btn_stop_bot">Stop Bot Service</string>
+    <string name="status_ready">Ready</string>
+    <string name="status_running">Running</string>
+</resources>

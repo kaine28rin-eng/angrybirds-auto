@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FF5722</color>
+    <color name="purple_500">#FF9800</color>
+    <color name="purple_700">#E65100</color>
+    <color name="teal_200">#4CAF50</color>
+    <color name="teal_700">#388E3C</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="overlay_button_bg">#CC2196F3</color>
+    <color name="ic_launcher_background">#FF5722</color>
+    <color name="overlay_button_bg_pressed">#CC1976D2</color>
+</resources>

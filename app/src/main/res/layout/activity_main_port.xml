@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Angry Birds Auto"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Checking permissions..."
+        android:textSize="16sp"
+        android:textColor="@color/white"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/btn_setup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Grant Permissions"
+        android:textSize="18sp"
+        android:layout_marginBottom="16dp"
+        style="?android:attr/borderlessButtonStyle"
+        android:backgroundTint="@color/purple_500"
+        android:textColor="@color/white" />
+
+    <Button
+        android:id="@+id/btn_start_bot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Bot Service"
+        android:textSize="18sp"
+        android:layout_marginBottom="16dp"
+        style="?android:attr/borderlessButtonStyle"
+        android:backgroundTint="@color/teal_700"
+        android:textColor="@color/white" />
+
+    <Button
+        android:id="@+id/btn_stop_bot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Stop Bot Service"
+        android:textSize="18sp"
+        style="?android:attr/borderlessButtonStyle"
+        android:backgroundTint="@color/purple_700"
+        android:textColor="@color/white" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1. Tap 'Grant Permissions' to enable overlay, accessibility, and screen capture."
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginTop="32dp"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="2. Tap 'Start Bot Service' to launch the floating button."
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="3. Open Angry Birds and tap the floating play button to auto-play."
+        android:textSize="14sp"
+        android:textColor="#CCCCCC" />
+
+</LinearLayout>

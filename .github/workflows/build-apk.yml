@@ -1,0 +1,46 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and Build Tools
+        uses: android-actions/android-install-ndk@v3
+        with:
+          ndk-version: 26.1.10909125
+
+      - name: Install additional SDK packages
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.1"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: angrybirds-auto-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
