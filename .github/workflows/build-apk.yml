@@ -37,3 +37,26 @@ jobs:
         with:
           name: angrybirds-auto-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-debug
+          name: Angry Birds Auto - Debug APK
+          body: |
+            ## Angry Birds Auto — Debug APK
+
+            ### Fixes in this build (REDMAGIC 11 Pro, Android 15+):
+            1. **OpenCV 64-bit (arm64-v8a) strict** — `ndk { abiFilters("arm64-v8a") }`
+               ensures only `libopencv_java4.so` for arm64-v8a is packaged.
+               32-bit fallbacks removed (REDMAGIC 11 Pro dropped armeabi-v7a support).
+            2. **OpenCV static init** — `OpenCVLoader.initDebug()` replaces
+               `initAsync()` (no external OpenCV Manager app dependency).
+            3. **Screen capture (Android 14+)** — `foregroundServiceType="mediaProjection"`
+               on MediaProjectionService and BotService, plus
+               `FOREGROUND_SERVICE_MEDIA_PROJECTION` permission.
+            4. **Shizuku appops bypass** — `dev.rikka.shizuku:api:13.1.5` integrated.
+               If SYSTEM_ALERT_WINDOW is denied, the app uses Shizuku to run
+               `appops set com.stevestudy.angrybirdsauto SYSTEM_ALERT_WINDOW allow`
+               to defeat the Red Magic OS toggle restriction.
+            files: app/build/outputs/apk/debug/app-debug.apk
