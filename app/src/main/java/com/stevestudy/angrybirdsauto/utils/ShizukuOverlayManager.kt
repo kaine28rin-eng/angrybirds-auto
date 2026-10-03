@@ -145,8 +145,9 @@ class ShizukuOverlayManager(private val activity: Activity) {
 
             if (process != null) {
                 // Wait for the command to complete
-                val waitForMethod = process.javaClass.getMethod("waitFor")
-                val exitCode = waitForMethod.invoke(process) as Int
+                val proc = process!!
+                val waitForMethod = proc.javaClass.getMethod("waitFor")
+                val exitCode = waitForMethod.invoke(proc) as Int
                 Log.i(tag, "appops command exit code: $exitCode")
                 exitCode == 0
             } else {

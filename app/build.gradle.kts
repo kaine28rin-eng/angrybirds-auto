@@ -20,7 +20,7 @@ android {
         // This strips all 32-bit .so files at build time; only libopencv_java4.so
         // for arm64-v8a will be packaged.
         ndk {
-            abiFilters("arm64-v8a")
+            abiFilters += setOf("arm64-v8a")
         }
     }
 
