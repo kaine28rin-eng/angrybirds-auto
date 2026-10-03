@@ -24,7 +24,7 @@ jobs:
 
       - name: Install Android SDK
         run: |
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076260_latest.zip -O /tmp/cmdline-tools.zip
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O /tmp/cmdline-tools.zip
           mkdir -p "$ANDROID_HOME/cmdline-tools"
           unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
           mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
