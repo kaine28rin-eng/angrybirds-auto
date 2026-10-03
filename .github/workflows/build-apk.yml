@@ -59,4 +59,4 @@ jobs:
                If SYSTEM_ALERT_WINDOW is denied, the app uses Shizuku to run
                `appops set com.stevestudy.angrybirdsauto SYSTEM_ALERT_WINDOW allow`
                to defeat the Red Magic OS toggle restriction.
-            files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/debug/app-debug.apk
